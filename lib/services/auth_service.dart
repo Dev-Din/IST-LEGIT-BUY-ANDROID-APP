@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
 import '../core/constants/app_constants.dart';
+import '../core/utils/debug_logger.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -106,6 +107,72 @@ class AuthService {
       }
     } catch (e) {
       throw Exception('Failed to update profile: $e');
+    }
+  }
+
+  // Initialize super-admin if needed (called on app startup)
+  Future<void> initializeSuperAdminIfNeeded() async {
+    try {
+      // Check if super-admin already exists in Firestore
+      final superAdminQuery = await _firestore
+          .collection(AppConstants.usersCollection)
+          .where('role', isEqualTo: AppConstants.roleSuperAdmin)
+          .limit(1)
+          .get();
+
+      if (superAdminQuery.docs.isNotEmpty) {
+        // Super-admin already exists, skip creation
+        return;
+      }
+
+      // Super-admin doesn't exist, create it
+      try {
+        // Try to sign in first (in case user exists in Firebase Auth but not in Firestore)
+        await _auth.signInWithEmailAndPassword(
+          email: AppConstants.superAdminEmail,
+          password: AppConstants.superAdminPassword,
+        );
+        
+        // User exists in Firebase Auth, update Firestore document
+        final user = _auth.currentUser;
+        if (user != null) {
+          await _firestore
+              .collection(AppConstants.usersCollection)
+              .doc(user.uid)
+              .set({
+            'email': AppConstants.superAdminEmail,
+            'name': AppConstants.superAdminName,
+            'role': AppConstants.roleSuperAdmin,
+            'createdAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+      } catch (e) {
+        // User doesn't exist in Firebase Auth, create it
+        UserCredential credential = await _auth.createUserWithEmailAndPassword(
+          email: AppConstants.superAdminEmail,
+          password: AppConstants.superAdminPassword,
+        );
+
+        // Create super-admin document in Firestore
+        await _firestore
+            .collection(AppConstants.usersCollection)
+            .doc(credential.user!.uid)
+            .set({
+          'email': AppConstants.superAdminEmail,
+          'name': AppConstants.superAdminName,
+          'role': AppConstants.roleSuperAdmin,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      // Silently fail - don't crash app if super-admin creation fails
+      // Log error for debugging
+      DebugLogger.log(
+        location: 'auth_service.dart:166',
+        message: 'Could not initialize super-admin (non-critical)',
+        data: {'error': e.toString()},
+        hypothesisId: 'A',
+      );
     }
   }
 }

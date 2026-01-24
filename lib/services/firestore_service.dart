@@ -7,28 +7,85 @@ import '../core/constants/app_constants.dart';
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // Helper method to safely get document data as Map
+  Map<String, dynamic> _getDocData(DocumentSnapshot doc) {
+    final data = doc.data();
+    if (data == null) return <String, dynamic>{};
+    return data as Map<String, dynamic>;
+  }
+
   // Products
   Stream<List<ProductModel>> getProducts() {
-    return _firestore
-        .collection(AppConstants.productsCollection)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => ProductModel.fromJson(
-                doc.data() as Map<String, dynamic>, doc.id))
-            .toList());
+    try {
+      return _firestore
+          .collection(AppConstants.productsCollection)
+          .orderBy('createdAt', descending: true)
+          .snapshots()
+          .map((snapshot) => snapshot.docs
+              .map((doc) => ProductModel.fromJson(
+                  _getDocData(doc), doc.id))
+              .toList())
+          .handleError((error) {
+            // If index doesn't exist, try without orderBy
+            if (error.toString().contains('index')) {
+              return _firestore
+                  .collection(AppConstants.productsCollection)
+                  .snapshots()
+                  .map((snapshot) => snapshot.docs
+                      .map((doc) => ProductModel.fromJson(
+                          _getDocData(doc), doc.id))
+                      .toList());
+            }
+            throw error;
+          });
+    } catch (e) {
+      // Return empty stream on error
+      return Stream.value(<ProductModel>[]);
+    }
   }
 
   Future<List<ProductModel>> getProductsOnce() async {
-    QuerySnapshot snapshot = await _firestore
-        .collection(AppConstants.productsCollection)
-        .orderBy('createdAt', descending: true)
-        .get();
+    try {
+      // Try with orderBy first (requires index)
+      QuerySnapshot snapshot = await _firestore
+          .collection(AppConstants.productsCollection)
+          .orderBy('createdAt', descending: true)
+          .get()
+          .timeout(const Duration(seconds: 10));
 
-    return snapshot.docs
-        .map((doc) => ProductModel.fromJson(
-            doc.data() as Map<String, dynamic>, doc.id))
-        .toList();
+      return snapshot.docs
+          .map((doc) => ProductModel.fromJson(
+              _getDocData(doc), doc.id))
+          .toList();
+    } catch (e) {
+      // If index doesn't exist or query fails, try without orderBy
+      if (e.toString().contains('index') || 
+          e.toString().contains('requires an index') ||
+          e.toString().contains('permission') ||
+          e.toString().contains('timeout')) {
+        try {
+          // Fallback: query without orderBy (no index needed)
+          QuerySnapshot snapshot = await _firestore
+              .collection(AppConstants.productsCollection)
+              .get()
+              .timeout(const Duration(seconds: 5));
+          
+          final products = snapshot.docs
+              .map((doc) => ProductModel.fromJson(
+                  _getDocData(doc), doc.id))
+              .toList();
+          
+          // Sort manually if we have products
+          products.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return products;
+        } catch (fallbackError) {
+          // Collection might not exist yet - return empty list
+          return [];
+        }
+      }
+      // Any other error - return empty list
+      return [];
+    }
   }
 
   Future<ProductModel?> getProduct(String productId) async {
@@ -38,8 +95,7 @@ class FirestoreService {
         .get();
 
     if (doc.exists) {
-      return ProductModel.fromJson(
-          doc.data() as Map<String, dynamic>, doc.id);
+      return ProductModel.fromJson(_getDocData(doc), doc.id);
     }
     return null;
   }
@@ -73,7 +129,7 @@ class FirestoreService {
         .snapshots()
         .map((snapshot) => snapshot.docs
             .map((doc) => OrderModel.fromJson(
-                doc.data() as Map<String, dynamic>, doc.id))
+                _getDocData(doc), doc.id))
             .toList());
   }
 
@@ -84,7 +140,7 @@ class FirestoreService {
         .snapshots()
         .map((snapshot) => snapshot.docs
             .map((doc) => OrderModel.fromJson(
-                doc.data() as Map<String, dynamic>, doc.id))
+                _getDocData(doc), doc.id))
             .toList());
   }
 
@@ -110,7 +166,7 @@ class FirestoreService {
         .snapshots()
         .map((snapshot) => snapshot.docs
             .map((doc) => UserModel.fromJson(
-                doc.data() as Map<String, dynamic>, doc.id))
+                _getDocData(doc), doc.id))
             .toList());
   }
 

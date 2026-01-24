@@ -7,24 +7,35 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 
 import 'package:ist_flutter_android_app/main.dart';
+import 'package:ist_flutter_android_app/providers/auth_provider.dart';
+import 'package:ist_flutter_android_app/providers/product_provider.dart';
+import 'package:ist_flutter_android_app/providers/cart_provider.dart';
+import 'package:ist_flutter_android_app/providers/order_provider.dart';
+import 'package:ist_flutter_android_app/providers/theme_provider.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
+  testWidgets('App initializes correctly', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => AuthProvider()),
+          ChangeNotifierProvider(create: (_) => ProductProvider()),
+          ChangeNotifierProvider(create: (_) => CartProvider()),
+          ChangeNotifierProvider(create: (_) => OrderProvider()),
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ],
+        child: const LegitBuyApp(),
+      ),
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // Wait for async initialization
+    await tester.pumpAndSettle();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Verify that the app builds without errors
+    expect(find.byType(MaterialApp), findsOneWidget);
   });
 }

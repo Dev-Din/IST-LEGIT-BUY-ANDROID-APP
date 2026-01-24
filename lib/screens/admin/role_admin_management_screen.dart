@@ -3,19 +3,44 @@ import '../../services/firestore_service.dart';
 import '../../models/user_model.dart';
 import '../../core/constants/app_constants.dart';
 
-class UserManagementScreen extends StatelessWidget {
-  const UserManagementScreen({super.key});
+class RoleAdminManagementScreen extends StatefulWidget {
+  const RoleAdminManagementScreen({super.key});
+
+  @override
+  State<RoleAdminManagementScreen> createState() => _RoleAdminManagementScreenState();
+}
+
+class _RoleAdminManagementScreenState extends State<RoleAdminManagementScreen> {
+  final FirestoreService _firestoreService = FirestoreService();
+  String? _selectedRoleFilter;
 
   @override
   Widget build(BuildContext context) {
-    final firestoreService = FirestoreService();
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Manage Users'),
+        title: const Text('Role-Based Admins'),
+        actions: [
+          // Filter by role
+          DropdownButton<String>(
+            value: _selectedRoleFilter,
+            hint: const Text('Filter'),
+            items: [
+              const DropdownMenuItem(value: null, child: Text('All Roles')),
+              ...AppConstants.allRoles.map((role) => DropdownMenuItem(
+                value: role,
+                child: Text(role.toUpperCase()),
+              )),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _selectedRoleFilter = value;
+              });
+            },
+          ),
+        ],
       ),
       body: StreamBuilder<List<UserModel>>(
-        stream: firestoreService.getAllUsers(),
+        stream: _firestoreService.getAllUsers(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -25,7 +50,16 @@ class UserManagementScreen extends StatelessWidget {
             return Center(child: Text('Error: ${snapshot.error}'));
           }
 
-          final users = snapshot.data ?? [];
+          final allUsers = snapshot.data ?? [];
+          
+          // Filter users (exclude super-admin from list, apply role filter)
+          final users = allUsers.where((user) {
+            if (user.role == AppConstants.roleSuperAdmin) return false;
+            if (_selectedRoleFilter != null) {
+              return user.role == _selectedRoleFilter;
+            }
+            return true;
+          }).toList();
 
           if (users.isEmpty) {
             return const Center(child: Text('No users found'));
@@ -69,7 +103,7 @@ class UserManagementScreen extends StatelessWidget {
                     }).toList(),
                     onChanged: (newRole) {
                       if (newRole != null && newRole != user.role) {
-                        firestoreService.updateUserRole(user.id, newRole);
+                        _showConfirmDialog(context, user, newRole);
                       }
                     },
                   ),
@@ -78,6 +112,36 @@ class UserManagementScreen extends StatelessWidget {
             },
           );
         },
+      ),
+    );
+  }
+
+  void _showConfirmDialog(BuildContext context, UserModel user, String newRole) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Change User Role'),
+        content: Text(
+          'Change ${user.name}\'s role from ${user.role.toUpperCase()} to ${newRole.toUpperCase()}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              _firestoreService.updateUserRole(user.id, newRole);
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('${user.name}\'s role updated to ${newRole.toUpperCase()}'),
+                ),
+              );
+            },
+            child: const Text('Confirm'),
+          ),
+        ],
       ),
     );
   }
