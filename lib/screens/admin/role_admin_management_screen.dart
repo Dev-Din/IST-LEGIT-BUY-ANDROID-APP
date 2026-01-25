@@ -70,11 +70,26 @@ class _RoleAdminManagementScreenState extends State<RoleAdminManagementScreen> {
             itemCount: users.length,
             itemBuilder: (context, index) {
               final user = users[index];
+              // Safe avatar initial - handle empty names and emails
+              String avatarText = '?';
+              try {
+                final name = user.name.trim();
+                final email = user.email.trim();
+                if (name.isNotEmpty) {
+                  avatarText = name[0].toUpperCase();
+                } else if (email.isNotEmpty) {
+                  avatarText = email[0].toUpperCase();
+                }
+              } catch (e) {
+                // Fallback to '?' if anything goes wrong
+                avatarText = '?';
+              }
+              
               return Card(
                 margin: const EdgeInsets.only(bottom: 16),
                 child: ListTile(
                   leading: CircleAvatar(
-                    child: Text(user.name[0].toUpperCase()),
+                    child: Text(avatarText),
                   ),
                   title: Text(user.name),
                   subtitle: Column(

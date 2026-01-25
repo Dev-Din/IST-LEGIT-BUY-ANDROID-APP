@@ -4,7 +4,6 @@ import '../../providers/product_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/shimmer/product_shimmer.dart';
-import '../../core/utils/debug_logger.dart';
 import 'product_list_screen.dart';
 import 'product_detail_screen.dart';
 import 'cart_screen.dart';
@@ -21,27 +20,12 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // #region agent log
-    DebugLogger.log(
-      location: 'home_screen.dart:23',
-      message: 'HomeScreen.initState() called',
-      hypothesisId: 'E',
-    );
-    // #endregion
   }
 
   @override
   Widget build(BuildContext context) {
-    // #region agent log
-    DebugLogger.log(
-      location: 'home_screen.dart:30',
-      message: 'HomeScreen.build() called',
-      hypothesisId: 'E',
-    );
-    // #endregion
-    
     try {
-    return Scaffold(
+      return Scaffold(
       appBar: AppBar(
         title: const Text('LegitBuy'),
         actions: [
@@ -137,28 +121,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: Consumer<ProductProvider>(
               builder: (context, productProvider, child) {
-                // #region agent log
-                DebugLogger.log(
-                  location: 'home_screen.dart:120',
-                  message: 'Consumer<ProductProvider> builder called',
-                  data: {
-                    'isLoading': productProvider.isLoading,
-                    'productCount': productProvider.products.length,
-                    'hasError': productProvider.error != null,
-                  },
-                  hypothesisId: 'E',
-                );
-                // #endregion
-                
                 if (productProvider.error != null) {
-                  // #region agent log
-                  DebugLogger.log(
-                    location: 'home_screen.dart:132',
-                    message: 'ProductProvider has error',
-                    data: {'error': productProvider.error},
-                    hypothesisId: 'E',
-                  );
-                  // #endregion
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -191,13 +154,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
                 
                 if (productProvider.isLoading) {
-                  // #region agent log
-                  DebugLogger.log(
-                    location: 'home_screen.dart:165',
-                    message: 'Showing loading shimmer',
-                    hypothesisId: 'E',
-                  );
-                  // #endregion
                   return GridView.builder(
                     padding: const EdgeInsets.all(16),
                     gridDelegate:
@@ -213,27 +169,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
 
                 if (productProvider.products.isEmpty) {
-                  // #region agent log
-                  DebugLogger.log(
-                    location: 'home_screen.dart:180',
-                    message: 'No products available',
-                    hypothesisId: 'E',
-                  );
-                  // #endregion
                   return const Center(
                     child: Text('No products available'),
                   );
                 }
 
-                // #region agent log
-                DebugLogger.log(
-                  location: 'home_screen.dart:190',
-                  message: 'Building product grid',
-                  data: {'productCount': productProvider.products.length},
-                  hypothesisId: 'E',
-                );
-                // #endregion
-                
                 return GridView.builder(
                   padding: const EdgeInsets.all(16),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -265,15 +205,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
-    } catch (e, stackTrace) {
-      // #region agent log
-      DebugLogger.log(
-        location: 'home_screen.dart:200',
-        message: 'HomeScreen.build() FAILED',
-        data: {'error': e.toString(), 'stackTrace': stackTrace.toString()},
-        hypothesisId: 'E',
-      );
-      // #endregion
+    } catch (e) {
       return Scaffold(
         appBar: AppBar(title: const Text('LegitBuy')),
         body: Center(

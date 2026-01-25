@@ -25,7 +25,10 @@ class UserManagementScreen extends StatelessWidget {
             return Center(child: Text('Error: ${snapshot.error}'));
           }
 
-          final users = snapshot.data ?? [];
+          final allUsers = snapshot.data ?? [];
+          
+          // Filter out super-admin users (they shouldn't be managed here)
+          final users = allUsers.where((user) => user.role != AppConstants.roleSuperAdmin).toList();
 
           if (users.isEmpty) {
             return const Center(child: Text('No users found'));
@@ -36,11 +39,26 @@ class UserManagementScreen extends StatelessWidget {
             itemCount: users.length,
             itemBuilder: (context, index) {
               final user = users[index];
+              // Safe avatar initial - handle empty names and emails
+              String avatarText = '?';
+              try {
+                final name = user.name.trim();
+                final email = user.email.trim();
+                if (name.isNotEmpty) {
+                  avatarText = name[0].toUpperCase();
+                } else if (email.isNotEmpty) {
+                  avatarText = email[0].toUpperCase();
+                }
+              } catch (e) {
+                // Fallback to '?' if anything goes wrong
+                avatarText = '?';
+              }
+              
               return Card(
                 margin: const EdgeInsets.only(bottom: 16),
                 child: ListTile(
                   leading: CircleAvatar(
-                    child: Text(user.name[0].toUpperCase()),
+                    child: Text(avatarText),
                   ),
                   title: Text(user.name),
                   subtitle: Column(
@@ -69,7 +87,7 @@ class UserManagementScreen extends StatelessWidget {
                     }).toList(),
                     onChanged: (newRole) {
                       if (newRole != null && newRole != user.role) {
-                        firestoreService.updateUserRole(user.id, newRole);
+                        _showConfirmDialog(context, user, newRole, firestoreService);
                       }
                     },
                   ),
@@ -78,6 +96,36 @@ class UserManagementScreen extends StatelessWidget {
             },
           );
         },
+      ),
+    );
+  }
+
+  void _showConfirmDialog(BuildContext context, UserModel user, String newRole, FirestoreService firestoreService) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Change User Role'),
+        content: Text(
+          'Change ${user.name}\'s role from ${user.role.toUpperCase()} to ${newRole.toUpperCase()}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              firestoreService.updateUserRole(user.id, newRole);
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('${user.name}\'s role updated to ${newRole.toUpperCase()}'),
+                ),
+              );
+            },
+            child: const Text('Confirm'),
+          ),
+        ],
       ),
     );
   }

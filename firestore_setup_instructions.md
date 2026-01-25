@@ -11,24 +11,31 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helper function to check if user is admin or superadmin
+    function isAdminOrSuperAdmin() {
+      return request.auth != null && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin'];
+    }
+    
     // Users collection
     match /users/{userId} {
-      allow read: if request.auth != null && (request.auth.uid == userId || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      allow read: if request.auth != null && (request.auth.uid == userId || isAdminOrSuperAdmin());
       allow write: if request.auth != null && request.auth.uid == userId;
       allow create: if request.auth != null;
+      allow update: if request.auth != null && (request.auth.uid == userId || isAdminOrSuperAdmin());
     }
     
     // Products collection
     match /products/{productId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow write: if request.auth != null && isAdminOrSuperAdmin();
     }
     
     // Orders collection
     match /orders/{orderId} {
-      allow read: if request.auth != null && (resource.data.userId == request.auth.uid || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      allow read: if request.auth != null && (resource.data.userId == request.auth.uid || isAdminOrSuperAdmin());
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update: if request.auth != null && (resource.data.userId == request.auth.uid || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      allow update: if request.auth != null && (resource.data.userId == request.auth.uid || isAdminOrSuperAdmin());
     }
   }
 }

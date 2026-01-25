@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../models/product_model.dart';
 import '../services/firestore_service.dart';
-import '../core/utils/debug_logger.dart';
 
 class ProductProvider with ChangeNotifier {
   final FirestoreService _firestoreService = FirestoreService();
@@ -29,24 +28,9 @@ class ProductProvider with ChangeNotifier {
   String? get priceFilter => _priceFilter;
 
   ProductProvider() {
-    // #region agent log
-    DebugLogger.log(
-      location: 'product_provider.dart:33',
-      message: 'ProductProvider constructor called',
-      hypothesisId: 'D',
-    );
-    // #endregion
     // Load products asynchronously - don't block constructor
     // Errors will be caught in loadProducts()
     loadProducts().catchError((error) {
-      // #region agent log
-      DebugLogger.log(
-        location: 'product_provider.dart:40',
-        message: 'ProductProvider.loadProducts() failed in constructor',
-        data: {'error': error.toString()},
-        hypothesisId: 'D',
-      );
-      // #endregion
       _error = error.toString();
       _isLoading = false;
       notifyListeners();
@@ -54,13 +38,6 @@ class ProductProvider with ChangeNotifier {
   }
 
   Future<void> loadProducts() async {
-    // #region agent log
-    DebugLogger.log(
-      location: 'product_provider.dart:56',
-      message: 'loadProducts() called',
-      hypothesisId: 'D',
-    );
-    // #endregion
     try {
       _isLoading = true;
       _error = null;
@@ -71,37 +48,14 @@ class ProductProvider with ChangeNotifier {
           .timeout(
             const Duration(seconds: 15),
             onTimeout: () {
-              // #region agent log
-              DebugLogger.log(
-                location: 'product_provider.dart:70',
-                message: 'loadProducts() TIMEOUT - returning empty list',
-                hypothesisId: 'D',
-              );
-              // #endregion
               return <ProductModel>[];
             },
           );
       
-      // #region agent log
-      DebugLogger.log(
-        location: 'product_provider.dart:79',
-        message: 'loadProducts() completed',
-        data: {'productCount': _products.length},
-        hypothesisId: 'D',
-      );
-      // #endregion
       _applyFilters();
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      // #region agent log
-      DebugLogger.log(
-        location: 'product_provider.dart:89',
-        message: 'loadProducts() FAILED',
-        data: {'error': e.toString()},
-        hypothesisId: 'D',
-      );
-      // #endregion
       _error = e.toString();
       _isLoading = false;
       _products = []; // Ensure products list is initialized
