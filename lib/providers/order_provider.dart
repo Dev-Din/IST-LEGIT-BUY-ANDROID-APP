@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/order_model.dart';
 import '../services/firestore_service.dart';
 
@@ -115,5 +116,23 @@ class OrderProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Stream order payment status changes
+  /// Listens to a specific order document for payment status updates
+  Stream<OrderModel?> listenToPaymentStatus(String orderId) {
+    return FirebaseFirestore.instance
+        .collection('orders')
+        .doc(orderId)
+        .snapshots()
+        .map((snapshot) {
+      if (!snapshot.exists) {
+        return null;
+      }
+      return OrderModel.fromJson(
+        snapshot.data() as Map<String, dynamic>,
+        snapshot.id,
+      );
+    });
   }
 }

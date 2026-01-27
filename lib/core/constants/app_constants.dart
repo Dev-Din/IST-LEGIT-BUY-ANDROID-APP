@@ -32,9 +32,14 @@ class AppConstants {
   
   // Payment Status
   static const String paymentStatusPending = 'pending';
+  static const String paymentStatusProcessing = 'processing';
   static const String paymentStatusPaid = 'paid';
   static const String paymentStatusFailed = 'failed';
+  static const String paymentStatusCancelled = 'cancelled';
   
   // Payment Method
   static const String paymentMethodMpesa = 'mpesa';
+  
+  // M-Pesa Configuration
+  static const Duration mpesaCallbackTimeout = Duration(minutes: 5);
 }

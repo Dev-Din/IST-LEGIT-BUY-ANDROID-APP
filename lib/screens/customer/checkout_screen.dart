@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/cart_provider.dart';
@@ -71,37 +72,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       if (!mounted) return;
 
-      // Update order with transaction ID if available
-      if (paymentResult['transactionId'] != null) {
-        await orderProvider.updatePaymentStatus(
-          orderId,
-          AppConstants.paymentStatusPending,
-          paymentResult['transactionId'],
-        );
-      }
+      // Show payment waiting dialog
+      final customerMessage = paymentResult['customerMessage'] as String? ??
+          'Please complete payment on your phone';
 
       // Clear cart
       cartProvider.clearCart();
 
-      // Navigate to order history
-      Navigator.pushReplacement(
+      // Show waiting dialog and listen for payment status
+      _showPaymentWaitingDialog(
         context,
-        MaterialPageRoute(
-          builder: (context) => const OrderHistoryScreen(),
-        ),
-      );
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Order placed successfully! Please complete payment.'),
-          backgroundColor: Colors.green,
-        ),
+        orderId,
+        customerMessage,
+        orderProvider,
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $e'),
+          content: Text('Error: ${e.toString()}'),
           backgroundColor: Colors.red,
         ),
       );
@@ -112,6 +101,136 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         });
       }
     }
+  }
+
+  void _showPaymentWaitingDialog(
+    BuildContext context,
+    String orderId,
+    String customerMessage,
+    OrderProvider orderProvider,
+  ) {
+    StreamSubscription<OrderModel?>? subscription;
+    Timer? timeoutTimer;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        // Start listening to payment status
+        subscription = orderProvider.listenToPaymentStatus(orderId).listen(
+          (order) {
+            if (order == null) return;
+
+            final paymentStatus = order.paymentStatus;
+
+            if (paymentStatus == AppConstants.paymentStatusPaid) {
+              // Payment successful
+              subscription?.cancel();
+              timeoutTimer?.cancel();
+              if (dialogContext.mounted) {
+                Navigator.of(dialogContext).pop();
+              }
+              if (context.mounted) {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (context) => const OrderHistoryScreen(),
+                  ),
+                );
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Payment successful! Order confirmed.'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            } else if (paymentStatus == AppConstants.paymentStatusFailed) {
+              // Payment failed
+              subscription?.cancel();
+              timeoutTimer?.cancel();
+              if (dialogContext.mounted) {
+                Navigator.of(dialogContext).pop();
+              }
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Payment failed. Please try again.'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
+          },
+        );
+
+        // Set timeout
+        timeoutTimer = Timer(AppConstants.mpesaCallbackTimeout, () {
+          if (dialogContext.mounted) {
+            Navigator.of(dialogContext).pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Payment timeout. Please check your order status in Order History.',
+                ),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 5),
+              ),
+            );
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => const OrderHistoryScreen(),
+              ),
+            );
+            subscription?.cancel();
+          }
+        });
+
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, result) {
+            if (!didPop) {
+              subscription?.cancel();
+              timeoutTimer?.cancel();
+            }
+          },
+          child: AlertDialog(
+            title: const Text('Waiting for Payment'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                Text(customerMessage),
+                const SizedBox(height: 8),
+                const Text(
+                  'Please complete the payment on your phone.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  subscription?.cancel();
+                  timeoutTimer?.cancel();
+                  Navigator.of(dialogContext).pop();
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (context) => const OrderHistoryScreen(),
+                    ),
+                  );
+                },
+                child: const Text('Check Order History'),
+              ),
+            ],
+          ),
+        );
+      },
+    ).then((_) {
+      // Cleanup when dialog is dismissed
+      subscription?.cancel();
+      timeoutTimer?.cancel();
+    });
   }
 
   @override
@@ -211,7 +330,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     color: Theme.of(context).cardColor,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 4,
                         offset: const Offset(0, -2),
                       ),
