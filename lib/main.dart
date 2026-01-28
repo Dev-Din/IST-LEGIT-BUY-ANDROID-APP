@@ -1,14 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'dart:ui';
-import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
-import 'package:http/http.dart' as http;
-
-// Conditional import for file I/O (not available on web)
-import 'dart:io' if (dart.library.html) 'io_stub.dart' as io;
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/product_provider.dart';
@@ -23,87 +18,27 @@ import 'services/auth_service.dart';
 import 'core/constants/app_constants.dart';
 import 'core/theme/app_theme.dart';
 import 'core/config/firebase_options.dart';
-
-// Helper function to log debug information
-Future<void> _debugLog(String location, String message, Map<String, dynamic> data, String hypothesisId) async {
-  if (!kDebugMode) return;
-  
-  final logEntry = {
-    'sessionId': 'debug-session',
-    'runId': 'run1',
-    'hypothesisId': hypothesisId,
-    'location': location,
-    'message': message,
-    'data': data,
-    'timestamp': DateTime.now().millisecondsSinceEpoch,
-  };
-  
-  if (kIsWeb) {
-    // Use HTTP for web
-    try {
-      await http.post(
-        Uri.parse('http://127.0.0.1:7247/ingest/08723f5b-fc0f-42bf-9c4d-727693db8107'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(logEntry),
-      ).timeout(const Duration(seconds: 1));
-    } catch (_) {
-      // Silently fail if logging server not available
-    }
-  } else {
-    // Use file for non-web (io.File will be dart:io on non-web, stub on web)
-    try {
-      final logFile = io.File('/home/nuru/Development/IST-EDUCATION-DIPLOMA-SOFTWARE-DEV/ist_flutter_android_app/.cursor/debug.log');
-      await logFile.writeAsString('${jsonEncode(logEntry)}\n', mode: io.FileMode.append);
-    } catch (_) {
-      // Silently fail
-    }
-  }
-}
+import 'widgets/emulator_banner_filter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // #region agent log
-  _debugLog('main.dart:27', 'App initialization started', {'kDebugMode': kDebugMode, 'isWeb': kIsWeb}, 'B');
-  // #endregion
   
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
     
-    // #region agent log
-    _debugLog('main.dart:34', 'Firebase initialized', {'kDebugMode': kDebugMode}, 'B');
-    // #endregion
-    
     // Connect to local emulators in debug mode
     if (kDebugMode) {
-      // #region agent log
-      _debugLog('main.dart:38', 'kDebugMode is true, connecting to emulators', {}, 'C');
-      // #endregion
-      
       try {
         // Firestore emulator
         FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
-        // #region agent log
-        _debugLog('main.dart:42', 'Firestore emulator connected', {'host': 'localhost', 'port': 8080}, 'C');
-        // #endregion
         
         // Auth emulator
         await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
-        // #region agent log
-        _debugLog('main.dart:47', 'Auth emulator connected', {'host': 'localhost', 'port': 9099}, 'C');
-        // #endregion
       } catch (e) {
-        // #region agent log
-        _debugLog('main.dart:50', 'Emulator connection error', {'error': e.toString()}, 'D');
-        // #endregion
         rethrow;
       }
-    } else {
-      // #region agent log
-      _debugLog('main.dart:57', 'kDebugMode is false, skipping emulator connection', {}, 'B');
-      // #endregion
     }
     
     // Initialize super-admin if needed
@@ -215,8 +150,9 @@ class LegitBuyApp extends StatelessWidget {
               debugShowCheckedModeBanner: false,
               home: const AuthWrapper(),
               builder: (context, child) {
-                // Just return child - don't override it
-                return child ?? const Scaffold(body: Center(child: Text('No widget to display')));
+                // Wrap child with EmulatorBannerFilter to remove Firebase emulator warning banner
+                final widget = child ?? const Scaffold(body: Center(child: Text('No widget to display')));
+                return EmulatorBannerFilter(child: widget);
               },
             );
           } catch (e) {

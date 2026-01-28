@@ -3,6 +3,10 @@
  * M-Pesa Payment Integration
  */
 
+// Load environment variables from .env file FIRST (before any imports that might need them)
+import * as dotenv from "dotenv";
+dotenv.config();
+
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import {initiateSTKPush} from "./mpesa/stkPush";
@@ -17,12 +21,43 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
+// Helper function to get serverTimestamp - handles emulator compatibility
+function getServerTimestamp() {
+  try {
+    if (admin.firestore && admin.firestore.FieldValue && admin.firestore.FieldValue.serverTimestamp) {
+      return admin.firestore.FieldValue.serverTimestamp();
+    }
+  } catch (error) {
+    functions.logger.warn("FieldValue.serverTimestamp not available");
+  }
+  // Fallback: use current timestamp as Date, Firestore will convert it
+  try {
+    if (admin.firestore && admin.firestore.Timestamp && admin.firestore.Timestamp.now) {
+      return admin.firestore.Timestamp.now();
+    }
+  } catch (error) {
+    functions.logger.warn("Timestamp.now() not available, using Date");
+  }
+  // Final fallback: use JavaScript Date
+  return new Date();
+}
+
 /**
  * HTTP Callable Function: Initiate M-Pesa Payment
  * Called from Flutter app to start STK Push payment
  */
 export const initiateMpesaPayment = functions.https.onCall(
   async (data, context) => {
+    // #region agent log
+    functions.logger.info("initiateMpesaPayment called", {
+      userId: context.auth?.uid,
+      phoneNumber: data?.phoneNumber,
+      amount: data?.amount,
+      orderId: data?.orderId,
+      envConsumerSecret: process.env.MPESA_CONSUMER_SECRET ? process.env.MPESA_CONSUMER_SECRET.substring(0, 20) + "..." : "missing",
+    });
+    // #endregion
+
     // Verify user is authenticated
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -75,7 +110,7 @@ export const initiateMpesaPayment = functions.https.onCall(
         checkoutRequestID: stkResponse.CheckoutRequestID,
         merchantRequestID: stkResponse.MerchantRequestID,
         paymentStatus: "processing",
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: getServerTimestamp(),
       });
 
       functions.logger.info("STK Push initiated", {
@@ -90,8 +125,20 @@ export const initiateMpesaPayment = functions.https.onCall(
         merchantRequestID: stkResponse.MerchantRequestID,
         customerMessage: stkResponse.CustomerMessage,
       };
-    } catch (error) {
-      functions.logger.error("Error initiating M-Pesa payment", error);
+    } catch (error: any) {
+      // #region agent log
+      const errorDetails = {
+        message: error?.message,
+        code: error?.code,
+        stack: error?.stack,
+        response: error?.response ? {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data,
+        } : undefined,
+      };
+      functions.logger.error("Error initiating M-Pesa payment - detailed", JSON.stringify(errorDetails, null, 2));
+      // #endregion
       
       if (error instanceof functions.https.HttpsError) {
         throw error;
@@ -144,14 +191,51 @@ export const mpesaCallback = functions.https.onRequest(async (req, res) => {
       
       // Extract transaction ID from callback metadata
       const metadata = stkCallback.CallbackMetadata?.Item;
+      functions.logger.info("Extracting transaction ID from callback", {
+        CheckoutRequestID: checkoutRequestID,
+        hasMetadata: !!metadata,
+        metadataLength: metadata?.length || 0,
+      });
+
       if (metadata) {
         const receiptItem = metadata.find((item) => item.Name === "MpesaReceiptNumber");
         if (receiptItem) {
           transactionId = String(receiptItem.Value);
+          functions.logger.info("Transaction ID extracted successfully", {
+            CheckoutRequestID: checkoutRequestID,
+            TransactionID: transactionId,
+            TransactionIDLength: transactionId.length,
+          });
+        } else {
+          functions.logger.warn("MpesaReceiptNumber not found in callback metadata", {
+            CheckoutRequestID: checkoutRequestID,
+            availableItems: metadata.map((item) => item.Name),
+          });
         }
+      } else {
+        functions.logger.warn("Callback metadata is missing", {
+          CheckoutRequestID: checkoutRequestID,
+        });
+      }
+
+      // Validate transaction ID before storing
+      if (!transactionId || transactionId.trim().length === 0) {
+        functions.logger.error("Transaction ID is empty or invalid", {
+          CheckoutRequestID: checkoutRequestID,
+          TransactionID: transactionId,
+        });
+        // Continue with payment status update even if transaction ID is missing
+        // Admin can manually verify the payment
       }
 
       // Update order status
+      functions.logger.info("Updating order with payment status and transaction ID", {
+        CheckoutRequestID: checkoutRequestID,
+        PaymentStatus: paymentStatus,
+        HasTransactionID: !!transactionId,
+        TransactionID: transactionId || "N/A",
+      });
+
       await updateOrderByCheckoutRequestID(
         checkoutRequestID,
         paymentStatus,
@@ -169,7 +253,7 @@ export const mpesaCallback = functions.https.onRequest(async (req, res) => {
         const orderDoc = ordersSnapshot.docs[0];
         await orderDoc.ref.update({
           status: "processing",
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: getServerTimestamp(),
         });
       }
     } else {

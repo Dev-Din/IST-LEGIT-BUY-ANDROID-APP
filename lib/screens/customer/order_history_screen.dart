@@ -122,6 +122,26 @@ class OrderHistoryScreen extends StatelessWidget {
                             'Payment: ${order.paymentStatus}',
                             style: TextStyle(color: Colors.grey[600]),
                           ),
+                          if (order.mpesaTransactionId != null) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.receipt,
+                                  size: 16,
+                                  color: Colors.blue,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'M-Pesa Receipt: ${order.mpesaTransactionId}',
+                                  style: const TextStyle(
+                                    color: Colors.blue,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),

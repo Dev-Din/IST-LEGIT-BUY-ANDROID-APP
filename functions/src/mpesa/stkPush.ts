@@ -13,19 +13,50 @@ dotenv.config();
 
 /**
  * Get M-Pesa configuration
+ * Priority: Environment variables > Firebase Functions config > Defaults
  */
 function getMpesaConfig(): MpesaConfig {
-  const config = functions.config().mpesa;
-  if (!config) {
-    throw new Error("M-Pesa configuration not found");
+  // First, try environment variables (for local development with emulators)
+  const envConsumerKey = process.env.MPESA_CONSUMER_KEY;
+  const envConsumerSecret = process.env.MPESA_CONSUMER_SECRET;
+  const envPasskey = process.env.MPESA_PASSKEY;
+  const envShortcode = process.env.MPESA_SHORTCODE;
+  const envBaseUrl = process.env.MPESA_BASE_URL;
+
+  if (envConsumerKey && envConsumerSecret && envPasskey && envShortcode) {
+    return {
+      consumerKey: envConsumerKey,
+      consumerSecret: envConsumerSecret,
+      passkey: envPasskey,
+      shortcode: envShortcode,
+      baseUrl: envBaseUrl || "https://sandbox.safaricom.co.ke",
+    };
   }
 
+  // Second, try Firebase Functions config (for production)
+  try {
+    const config = functions.config().mpesa;
+    if (config) {
+      return {
+        consumerKey: config.consumer_key || "yVcigqegMbip51XGxKZNm5JYf8eVTrFSuQF9rLMi657wjPDP",
+        consumerSecret: config.consumer_secret || "u7GKHXpo55Apq6sfbyXj5D9R3YclLxy7OA5jWhZ9PqLfMPB2pDAWFqob1ExFyFC2",
+        passkey: config.passkey || "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919",
+        shortcode: config.shortcode || "174379",
+        baseUrl: config.base_url || "https://sandbox.safaricom.co.ke",
+      };
+    }
+  } catch (error) {
+    // functions.config() may not be available in emulator
+    functions.logger.warn("Firebase Functions config not available, using defaults");
+  }
+
+  // Finally, use defaults (for local development fallback)
   return {
-    consumerKey: config.consumer_key || "yVcigqegMbip51XGxKZNm5JYf8eVTrFSuQF9rLMi657wjPDP",
-    consumerSecret: config.consumer_secret || "u7GKHXpo55Apq6sfbyXj5D9R3YclLxy7OA5jWhZ9PqLfMPB2pDAWFqob1ExFyFC2",
-    passkey: config.passkey || "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919",
-    shortcode: config.shortcode || "174379",
-    baseUrl: config.base_url || "https://sandbox.safaricom.co.ke",
+    consumerKey: "yVcigqegMbip51XGxKZNm5JYf8eVTrFSuQF9rLMi657wjPDP",
+    consumerSecret: "u7GKHXpo55Apq6sfbyXj5D9R3YclLxy7OA5jWhZ9PqLfMPB2pDAWFqob1ExFyFC2",
+    passkey: "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919",
+    shortcode: "174379",
+    baseUrl: "https://sandbox.safaricom.co.ke",
   };
 }
 
@@ -111,6 +142,12 @@ export async function initiateSTKPush(
         headers: {
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+          "Accept": "application/json",
+        },
+        timeout: 30000, // 30 second timeout
+        validateStatus: function (status) {
+          return status < 500; // Don't throw on 4xx errors, we'll handle them
         },
       }
     );
