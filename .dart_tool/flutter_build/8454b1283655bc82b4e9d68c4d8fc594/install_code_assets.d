@@ -1,0 +1,1 @@
+ /home/nuru/Development/IST-EDUCATION-DIPLOMA-SOFTWARE-DEV/ist_flutter_android_app/.dart_tool/flutter_build/8454b1283655bc82b4e9d68c4d8fc594/native_assets.json: 

@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'dart:convert';
+import 'dart:io';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../core/constants/app_constants.dart';
@@ -69,6 +71,12 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<bool> signIn(String email, String password) async {
+    // #region agent log
+    try {
+      final logFile = File('/home/nuru/Development/IST-EDUCATION-DIPLOMA-SOFTWARE-DEV/ist_flutter_android_app/.cursor/debug.log');
+      logFile.writeAsStringSync('${jsonEncode({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"auth_provider.dart:72","message":"AuthProvider.signIn called","data":{"email":email,"passwordLength":password.length},"timestamp":DateTime.now().millisecondsSinceEpoch})}\n', mode: FileMode.append);
+    } catch (_) {}
+    // #endregion
     try {
       _isLoading = true;
       _error = null;
@@ -78,11 +86,23 @@ class AuthProvider with ChangeNotifier {
         email: email,
         password: password,
       );
+      // #region agent log
+      try {
+        final logFile = File('/home/nuru/Development/IST-EDUCATION-DIPLOMA-SOFTWARE-DEV/ist_flutter_android_app/.cursor/debug.log');
+        logFile.writeAsStringSync('${jsonEncode({"sessionId":"debug-session","runId":"run1","hypothesisId":"F","location":"auth_provider.dart:81","message":"AuthProvider.signIn succeeded","data":{"userExists":_user!=null,"role":_user?.role,"isSuperAdmin":_user?.role==AppConstants.roleSuperAdmin},"timestamp":DateTime.now().millisecondsSinceEpoch})}\n', mode: FileMode.append);
+      } catch (_) {}
+      // #endregion
 
       _isLoading = false;
       notifyListeners();
       return true;
     } catch (e) {
+      // #region agent log
+      try {
+        final logFile = File('/home/nuru/Development/IST-EDUCATION-DIPLOMA-SOFTWARE-DEV/ist_flutter_android_app/.cursor/debug.log');
+        logFile.writeAsStringSync('${jsonEncode({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"auth_provider.dart:87","message":"AuthProvider.signIn failed","data":{"error":e.toString(),"errorMessage":_error},"timestamp":DateTime.now().millisecondsSinceEpoch})}\n', mode: FileMode.append);
+      } catch (_) {}
+      // #endregion
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
