@@ -438,7 +438,7 @@ class _PaymentWaitingDialogState extends State<_PaymentWaitingDialog> {
           // Try to reconnect
           setState(() {
             _hasStreamError = true;
-            _streamErrorMessage = 'Connection issue. Reconnecting... (${_reconnectAttempts}/$_maxReconnectAttempts)';
+            _streamErrorMessage = 'Connection issue. Reconnecting... ($_reconnectAttempts/$_maxReconnectAttempts)';
           });
           
           // Wait a bit before reconnecting

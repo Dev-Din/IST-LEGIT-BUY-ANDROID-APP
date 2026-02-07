@@ -3,7 +3,7 @@ import '../models/cart_item_model.dart';
 import '../models/product_model.dart';
 
 class CartProvider with ChangeNotifier {
-  List<CartItemModel> _cartItems = [];
+  final List<CartItemModel> _cartItems = [];
 
   List<CartItemModel> get cartItems => _cartItems;
   int get itemCount => _cartItems.fold(0, (sum, item) => sum + item.quantity);

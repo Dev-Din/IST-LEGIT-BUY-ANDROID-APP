@@ -93,6 +93,13 @@ class AuthProvider with ChangeNotifier {
       } catch (_) {}
       // #endregion
 
+      if (_user == null) {
+        _error = 'Could not load account. Please try again or contact support.';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
       _isLoading = false;
       notifyListeners();
       return true;

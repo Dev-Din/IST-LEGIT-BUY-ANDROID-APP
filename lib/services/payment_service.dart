@@ -1,5 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, defaultTargetPlatform, TargetPlatform;
 
 class PaymentService {
   final FirebaseFunctions _functions;
@@ -7,7 +7,10 @@ class PaymentService {
   PaymentService() : _functions = FirebaseFunctions.instance {
     // Connect to local emulator in debug mode
     if (kDebugMode) {
-      _functions.useFunctionsEmulator('localhost', 5001);
+      final emulatorHost = defaultTargetPlatform == TargetPlatform.android
+          ? '10.0.2.2'
+          : 'localhost';
+      _functions.useFunctionsEmulator(emulatorHost, 5001);
     }
   }
 

@@ -43,13 +43,33 @@ class AuthService {
         logFile.writeAsStringSync('${jsonEncode({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"auth_service.dart:30","message":"Firebase Auth signInWithEmailAndPassword succeeded","data":{"uid":credential.user?.uid,"email":credential.user?.email},"timestamp":DateTime.now().millisecondsSinceEpoch})}\n', mode: FileMode.append);
       } catch (_) {}
       // #endregion
-      final userData = await getUserData(credential.user!.uid);
+      var userData = await getUserData(credential.user!.uid);
       // #region agent log
       try {
         final logFile = File('/home/nuru/Development/IST-EDUCATION-DIPLOMA-SOFTWARE-DEV/ist_flutter_android_app/.cursor/debug.log');
         logFile.writeAsStringSync('${jsonEncode({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"auth_service.dart:33","message":"getUserData result","data":{"userDataExists":userData!=null,"role":userData?.role,"expectedRole":AppConstants.roleSuperAdmin,"roleMatch":userData?.role==AppConstants.roleSuperAdmin},"timestamp":DateTime.now().millisecondsSinceEpoch})}\n', mode: FileMode.append);
       } catch (_) {}
       // #endregion
+
+      // Repair: if Auth succeeded but Firestore user doc is missing, create it
+      if (userData == null) {
+        final firebaseUser = credential.user!;
+        final repairUser = UserModel(
+          id: firebaseUser.uid,
+          email: firebaseUser.email ?? '',
+          name: firebaseUser.displayName ?? firebaseUser.email?.split('@').first ?? 'User',
+          role: AppConstants.roleCustomer,
+          createdAt: DateTime.now(),
+        );
+
+        await _firestore
+            .collection(AppConstants.usersCollection)
+            .doc(firebaseUser.uid)
+            .set(repairUser.toJson());
+
+        userData = repairUser;
+      }
+
       return userData;
     } catch (e) {
       // #region agent log
@@ -83,10 +103,19 @@ class AuthService {
         createdAt: DateTime.now(),
       );
 
-      await _firestore
-          .collection(AppConstants.usersCollection)
-          .doc(credential.user!.uid)
-          .set(user.toJson());
+      // Attempt Firestore write with one retry to avoid leaving Auth-only users
+      try {
+        await _firestore
+            .collection(AppConstants.usersCollection)
+            .doc(credential.user!.uid)
+            .set(user.toJson());
+      } catch (_) {
+        // Retry once
+        await _firestore
+            .collection(AppConstants.usersCollection)
+            .doc(credential.user!.uid)
+            .set(user.toJson());
+      }
 
       return user;
     } catch (e) {

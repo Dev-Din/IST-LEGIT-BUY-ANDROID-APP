@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, defaultTargetPlatform, TargetPlatform;
 import 'dart:ui';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -31,11 +31,15 @@ void main() async {
     // Connect to local emulators in debug mode
     if (kDebugMode) {
       try {
+        final emulatorHost = defaultTargetPlatform == TargetPlatform.android
+            ? '10.0.2.2'
+            : 'localhost';
+
         // Firestore emulator
-        FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
+        FirebaseFirestore.instance.useFirestoreEmulator(emulatorHost, 8080);
         
         // Auth emulator
-        await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
+        await FirebaseAuth.instance.useAuthEmulator(emulatorHost, 9099);
       } catch (e) {
         rethrow;
       }
