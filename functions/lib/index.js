@@ -37,7 +37,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.paymentStatus = exports.mpesaCallback = exports.initiateMpesaPayment = void 0;
+exports.deleteUser = exports.createUserByAdmin = exports.paymentStatus = exports.mpesaCallback = exports.initiateMpesaPayment = void 0;
 // Load environment variables from .env file FIRST (before any imports that might need them)
 const dotenv = __importStar(require("dotenv"));
 dotenv.config();
@@ -336,6 +336,80 @@ exports.paymentStatus = functions.https.onRequest(async (req, res) => {
     catch (error) {
         functions.logger.error("Error getting payment status", error);
         res.status(500).json({ error: "Internal server error" });
+    }
+});
+// --- Admin user management (CRUD) ---
+const USERS_COLLECTION = "users";
+async function requireAdminOrSuperAdmin(context) {
+    var _a, _b;
+    if (!((_a = context.auth) === null || _a === void 0 ? void 0 : _a.uid)) {
+        throw new functions.https.HttpsError("unauthenticated", "Must be logged in");
+    }
+    const callerDoc = await db.collection(USERS_COLLECTION).doc(context.auth.uid).get();
+    const callerRole = (_b = callerDoc.data()) === null || _b === void 0 ? void 0 : _b.role;
+    if (callerRole !== "admin" && callerRole !== "superadmin") {
+        throw new functions.https.HttpsError("permission-denied", "Admin or Super Admin only");
+    }
+}
+/**
+ * Create a new user (Auth + Firestore). Callable by admin/superadmin only.
+ * Data: { email, password, name, role } (role: customer | admin)
+ */
+exports.createUserByAdmin = functions.https.onCall(async (data, context) => {
+    await requireAdminOrSuperAdmin(context);
+    const { email, password, name, role } = data || {};
+    if (!email || typeof email !== "string" || !password || typeof password !== "string") {
+        throw new functions.https.HttpsError("invalid-argument", "email and password are required");
+    }
+    const safeName = typeof name === "string" ? name.trim() || email.split("@")[0] : email.split("@")[0];
+    const safeRole = role === "admin" ? "admin" : "customer";
+    try {
+        const userRecord = await admin.auth().createUser({
+            email: email.trim().toLowerCase(),
+            password: String(password),
+            displayName: safeName,
+        });
+        const uid = userRecord.uid;
+        await db.collection(USERS_COLLECTION).doc(uid).set({
+            email: email.trim().toLowerCase(),
+            name: safeName,
+            role: safeRole,
+            createdAt: getServerTimestamp(),
+        });
+        return { success: true, uid, email: userRecord.email, name: safeName, role: safeRole };
+    }
+    catch (error) {
+        functions.logger.error("createUserByAdmin error", error);
+        if (error.code === "auth/email-already-exists") {
+            throw new functions.https.HttpsError("already-exists", "Email already in use");
+        }
+        throw new functions.https.HttpsError("internal", error.message || "Failed to create user");
+    }
+});
+/**
+ * Delete a user (Auth + Firestore). Callable by admin/superadmin only.
+ * Data: { userId }
+ */
+exports.deleteUser = functions.https.onCall(async (data, context) => {
+    var _a;
+    await requireAdminOrSuperAdmin(context);
+    const userId = data === null || data === void 0 ? void 0 : data.userId;
+    if (!userId || typeof userId !== "string") {
+        throw new functions.https.HttpsError("invalid-argument", "userId is required");
+    }
+    const targetDoc = await db.collection(USERS_COLLECTION).doc(userId).get();
+    const targetRole = (_a = targetDoc.data()) === null || _a === void 0 ? void 0 : _a.role;
+    if (targetRole === "superadmin") {
+        throw new functions.https.HttpsError("permission-denied", "Cannot delete super admin");
+    }
+    try {
+        await admin.auth().deleteUser(userId);
+        await db.collection(USERS_COLLECTION).doc(userId).delete();
+        return { success: true };
+    }
+    catch (error) {
+        functions.logger.error("deleteUser error", error);
+        throw new functions.https.HttpsError("internal", error.message || "Failed to delete user");
     }
 });
 //# sourceMappingURL=index.js.map

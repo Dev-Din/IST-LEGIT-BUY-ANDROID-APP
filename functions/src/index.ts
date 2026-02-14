@@ -371,3 +371,84 @@ export const paymentStatus = functions.https.onRequest(async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+// --- Admin user management (CRUD) ---
+const USERS_COLLECTION = "users";
+
+async function requireAdminOrSuperAdmin(context: functions.https.CallableContext): Promise<void> {
+  if (!context.auth?.uid) {
+    throw new functions.https.HttpsError("unauthenticated", "Must be logged in");
+  }
+  const callerDoc = await db.collection(USERS_COLLECTION).doc(context.auth.uid).get();
+  const callerRole = callerDoc.data()?.role as string | undefined;
+  if (callerRole !== "admin" && callerRole !== "superadmin") {
+    throw new functions.https.HttpsError("permission-denied", "Admin or Super Admin only");
+  }
+}
+
+/**
+ * Create a new user (Auth + Firestore). Callable by admin/superadmin only.
+ * Data: { email, password, name, role } (role: customer | admin)
+ */
+export const createUserByAdmin = functions.https.onCall(async (data, context) => {
+  await requireAdminOrSuperAdmin(context);
+
+  const { email, password, name, role } = data || {};
+  if (!email || typeof email !== "string" || !password || typeof password !== "string") {
+    throw new functions.https.HttpsError("invalid-argument", "email and password are required");
+  }
+  const safeName = typeof name === "string" ? name.trim() || email.split("@")[0] : email.split("@")[0];
+  const safeRole = role === "admin" ? "admin" : "customer";
+
+  try {
+    const userRecord = await admin.auth().createUser({
+      email: email.trim().toLowerCase(),
+      password: String(password),
+      displayName: safeName,
+    });
+    const uid = userRecord.uid;
+
+    await db.collection(USERS_COLLECTION).doc(uid).set({
+      email: email.trim().toLowerCase(),
+      name: safeName,
+      role: safeRole,
+      createdAt: getServerTimestamp(),
+    });
+
+    return { success: true, uid, email: userRecord.email, name: safeName, role: safeRole };
+  } catch (error: any) {
+    functions.logger.error("createUserByAdmin error", error);
+    if (error.code === "auth/email-already-exists") {
+      throw new functions.https.HttpsError("already-exists", "Email already in use");
+    }
+    throw new functions.https.HttpsError("internal", error.message || "Failed to create user");
+  }
+});
+
+/**
+ * Delete a user (Auth + Firestore). Callable by admin/superadmin only.
+ * Data: { userId }
+ */
+export const deleteUser = functions.https.onCall(async (data, context) => {
+  await requireAdminOrSuperAdmin(context);
+
+  const userId = data?.userId;
+  if (!userId || typeof userId !== "string") {
+    throw new functions.https.HttpsError("invalid-argument", "userId is required");
+  }
+
+  const targetDoc = await db.collection(USERS_COLLECTION).doc(userId).get();
+  const targetRole = targetDoc.data()?.role as string | undefined;
+  if (targetRole === "superadmin") {
+    throw new functions.https.HttpsError("permission-denied", "Cannot delete super admin");
+  }
+
+  try {
+    await admin.auth().deleteUser(userId);
+    await db.collection(USERS_COLLECTION).doc(userId).delete();
+    return { success: true };
+  } catch (error: any) {
+    functions.logger.error("deleteUser error", error);
+    throw new functions.https.HttpsError("internal", error.message || "Failed to delete user");
+  }
+});
