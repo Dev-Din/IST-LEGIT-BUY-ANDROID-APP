@@ -76,19 +76,24 @@ function generatePassword(shortcode: string, passkey: string): string {
  * Get callback URL for M-Pesa
  * Supports both production and local development with ngrok
  */
-function getCallbackUrl(): string {
+export function getCallbackUrl(): string {
   // Check for ngrok URL in environment variable (for local development)
   const ngrokUrl = process.env.NGROK_URL;
   if (ngrokUrl) {
     // Remove trailing slash if present
     const cleanUrl = ngrokUrl.replace(/\/$/, '');
-    return `${cleanUrl}/mpesaCallback`;
+    // In the Functions emulator, HTTP functions are served at
+    // /{projectId}/{region}/{functionName}
+    // ngrok forwards to localhost:5001, so the full path is required
+    const projectId = process.env.GCLOUD_PROJECT || "ist-flutter-android-app";
+    const region = process.env.FUNCTION_REGION || "us-central1";
+    return `${cleanUrl}/${projectId}/${region}/mpesaCallback`;
   }
 
   // Production: Use Firebase Cloud Functions URL
   const projectId = process.env.GCLOUD_PROJECT || functions.config().project?.id;
   const region = process.env.FUNCTION_REGION || "us-central1";
-  
+
   // Construct callback URL
   // Format: https://[region]-[project-id].cloudfunctions.net/mpesaCallback
   return `https://${region}-${projectId}.cloudfunctions.net/mpesaCallback`;

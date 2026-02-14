@@ -9,7 +9,7 @@ dotenv.config();
 
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import {initiateSTKPush} from "./mpesa/stkPush";
+import {initiateSTKPush, getCallbackUrl} from "./mpesa/stkPush";
 import {updateOrderByCheckoutRequestID} from "./mpesa/callback";
 import {validateAndFormatPhoneNumber, validateAmount, validateOrderId} from "./utils/validation";
 import {MpesaCallbackBody} from "./mpesa/types";
@@ -99,6 +99,7 @@ export const initiateMpesaPayment = functions.https.onCall(
       }
 
       // Initiate STK Push
+      const callbackUrl = getCallbackUrl();
       const stkResponse = await initiateSTKPush(
         formattedPhone,
         amount,
@@ -116,6 +117,7 @@ export const initiateMpesaPayment = functions.https.onCall(
       functions.logger.info("STK Push initiated", {
         orderId,
         checkoutRequestID: stkResponse.CheckoutRequestID,
+        callbackUrl: callbackUrl,
       });
 
       // Return response to Flutter app
@@ -157,7 +159,17 @@ export const initiateMpesaPayment = functions.https.onCall(
  * Receives callbacks from M-Pesa API when payment is completed
  */
 export const mpesaCallback = functions.https.onRequest(async (req, res) => {
-  // Only accept POST requests
+  // Handle GET requests for health check / manual verification
+  if (req.method === "GET") {
+    res.status(200).json({
+      ok: true,
+      message: "Callback URL is reachable",
+      endpoint: "mpesaCallback",
+    });
+    return;
+  }
+
+  // Only accept POST requests for actual callbacks
   if (req.method !== "POST") {
     res.status(405).send("Method Not Allowed");
     return;
@@ -285,5 +297,77 @@ export const mpesaCallback = functions.https.onRequest(async (req, res) => {
       ResultCode: 0,
       ResultDesc: "Callback received (error logged)",
     });
+  }
+});
+
+/**
+ * HTTP Function: Get payment status by checkout request ID
+ * Returns payment status from Firestore for polling
+ */
+export const paymentStatus = functions.https.onRequest(async (req, res) => {
+  // Only accept GET requests
+  if (req.method !== "GET") {
+    res.status(405).json({ error: "Method Not Allowed" });
+    return;
+  }
+
+  try {
+    const checkoutRequestId = req.query.checkout_request_id as string;
+
+    if (!checkoutRequestId) {
+      res.status(400).json({ error: "checkout_request_id is required" });
+      return;
+    }
+
+    // Query Firestore for order with matching checkoutRequestID
+    const ordersSnapshot = await db
+      .collection("orders")
+      .where("checkoutRequestID", "==", checkoutRequestId)
+      .limit(1)
+      .get();
+
+    if (ordersSnapshot.empty) {
+      res.status(404).json({ error: "Payment not found" });
+      return;
+    }
+
+    const orderDoc = ordersSnapshot.docs[0];
+    const orderData = orderDoc.data();
+    const paymentStatus = orderData.paymentStatus as string;
+    const mpesaTransactionId = orderData.mpesaTransactionId as string | undefined;
+
+    // Map Firestore paymentStatus to API response
+    let status: "pending" | "completed" | "failed";
+    let message: string;
+
+    if (paymentStatus === "paid") {
+      status = "completed";
+      message = "Payment completed";
+    } else if (paymentStatus === "failed") {
+      status = "failed";
+      message = "Payment failed";
+    } else {
+      // pending or processing
+      status = "pending";
+      message = "Payment pending";
+    }
+
+    const response: {
+      status: "pending" | "completed" | "failed";
+      message: string;
+      mpesa_receipt?: string;
+    } = {
+      status,
+      message,
+    };
+
+    if (mpesaTransactionId) {
+      response.mpesa_receipt = mpesaTransactionId;
+    }
+
+    res.status(200).json(response);
+  } catch (error) {
+    functions.logger.error("Error getting payment status", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });

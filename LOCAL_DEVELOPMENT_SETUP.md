@@ -123,6 +123,59 @@ The app will automatically connect to local emulators when running in debug mode
    - Firestore data updates
    - Auth events
 
+### Quick Payment Test Checklist
+
+Follow these steps **in order** every time you test M-Pesa payments locally:
+
+1. **Start ngrok** (in a separate terminal):
+   ```bash
+   ngrok http 5001
+   ```
+   Leave this running. Copy the HTTPS URL (e.g. `https://xxxx.ngrok-free.app`).
+
+2. **Set `NGROK_URL`** in `functions/.env`:
+   ```
+   NGROK_URL=https://xxxx.ngrok-free.app
+   ```
+   No trailing slash.
+
+3. **Start Firebase emulators**:
+   ```bash
+   firebase emulators:start
+   ```
+
+4. **Verify all three functions are loaded** in the emulator startup log:
+   ```
+   Loaded functions definitions from source: initiateMpesaPayment, mpesaCallback, paymentStatus.
+   ```
+   If `paymentStatus` is missing, stop the emulators (Ctrl+C) and start them again.
+
+5. **Run the Flutter app**:
+   ```bash
+   flutter run
+   ```
+
+6. **Place an order**, enter a phone number, tap "Place Order", and complete the STK prompt on the phone.
+
+7. **Within about 15-30 seconds** after M-Pesa confirms payment, the app should navigate to the **Payment Successful** screen and the order should be marked as paid.
+
+If any step fails, see the Troubleshooting section below.
+
+#### How the payment success flow works
+
+The app shows payment success when the order document in Firestore has `paymentStatus: "paid"`. This update is written by the M-Pesa callback HTTP function (`mpesaCallback`) when Safaricom POSTs to your callback URL after the user completes payment on their phone.
+
+**Flow:**
+1. User completes payment on their phone (M-Pesa prompt)
+2. Safaricom sends a callback POST to your callback URL. For the emulator this is `NGROK_URL/{projectId}/{region}/mpesaCallback` (e.g. `https://xxxx.ngrok-free.app/ist-flutter-android-app/us-central1/mpesaCallback`) so ngrok forwards to the correct emulator path.
+3. The callback function updates the order in Firestore: `paymentStatus: "paid"` and `mpesaTransactionId: "..."` (M-Pesa receipt number)
+4. The app checks status immediately, then polls the backend `paymentStatus` endpoint every 15 seconds
+5. When the endpoint returns `"completed"`, the app navigates to the Payment Successful screen
+
+**If the order stays "Pending" or the Waiting screen keeps loading:**
+- The callback likely did not reach your backend or failed before updating Firestore
+- See "M-Pesa Callbacks Not Received" and "Payment Not Found" troubleshooting sections below
+
 ## Port Configuration
 
 - **Functions Emulator**: `localhost:5001`
@@ -174,13 +227,52 @@ The app will automatically connect to local emulators when running in debug mode
 
 ### M-Pesa Callbacks Not Received
 
-**Issue:** Payment initiated but callback never arrives
+**Issue:** Payment initiated but callback never arrives, or order stays "Pending" after payment
+
 - **Solution:**
   1. Verify ngrok is running: `ngrok http 5001`
-  2. Check `functions/.env` has correct `NGROK_URL`
+  2. Check `functions/.env` has correct `NGROK_URL` (no trailing slash)
   3. Restart Firebase Emulators after updating `.env`
-  4. Check ngrok web interface: http://localhost:4040 (shows requests)
+  4. Check ngrok web interface: http://localhost:4040 (shows incoming requests)
   5. Verify callback URL in M-Pesa request logs matches ngrok URL
+  
+- **Callback URL path (emulator):** The Functions emulator serves HTTP functions at `/{projectId}/{region}/{functionName}`. So the callback URL sent to Safaricom must be `NGROK_URL/ist-flutter-android-app/us-central1/mpesaCallback` (not just `NGROK_URL/mpesaCallback`). The code in `functions/src/mpesa/stkPush.ts` builds this URL when `NGROK_URL` is set. If you ever see "Verification timeout" after paying, the callback likely hit a 404 because the path was wrong; ensure you have rebuilt functions (`npm run build` in `functions/`) and restarted emulators after any change to the callback URL logic.
+
+- **Verify callback endpoint is reachable:**
+  - Open `https://<NGROK_URL>/ist-flutter-android-app/us-central1/mpesaCallback` in a browser (GET request)
+  - You should see: `{"ok":true,"message":"Callback URL is reachable","endpoint":"mpesaCallback"}`
+  - If you get an error or 404, ngrok is not forwarding correctly or the path is wrong
+
+- **Check Functions emulator logs:**
+  - When testing a payment, watch the **Functions emulator terminal** (where `firebase emulators:start` is running)
+  - Look for log line: `"M-Pesa callback received"` with `ResultCode` and `CheckoutRequestID`
+  - **If you see this log:** The callback reached your backend; check for any errors after that line
+  - **If you don't see this log:** The callback URL is likely unreachable (ngrok down, wrong URL path, or network/firewall blocking Safaricom)
+
+- **Check callback URL in logs:**
+  - When initiating payment, the Functions emulator logs should show: `"STK Push initiated"` (or "Initiating STK Push") with `callbackUrl`
+  - Verify this URL includes `/ist-flutter-android-app/us-central1/mpesaCallback` (full path). If it only shows `/mpesaCallback`, rebuild functions and restart emulators.
+  
+- **Note:** The app polls the backend every 15 seconds automatically; there is no manual "Check payment status" button. If the Waiting for Payment screen shows "Payment not found" or keeps loading, follow the troubleshooting steps above and the "Payment Not Found" section below.
+
+### Payment Not Found (App Shows "Error checking status: Exception: Payment not found")
+
+**Issue:** The Waiting for Payment screen shows "Error checking status: Exception: Payment not found"
+
+This means the app's GET request to the `paymentStatus` endpoint is returning 404. Two possible causes:
+
+1. **`paymentStatus` function is not loaded in the emulator:**
+   - Restart the Firebase emulators (`firebase emulators:start`)
+   - Check the startup log for **all three** functions: `initiateMpesaPayment`, `mpesaCallback`, **`paymentStatus`**
+   - If `paymentStatus` is missing, the endpoint does not exist and every poll will get 404
+   - Stop and restart until all three appear
+
+2. **Order not found by `checkoutRequestID` in Firestore:**
+   - Open the Firestore emulator UI: http://localhost:4000/firestore
+   - Open the `orders` collection
+   - Find the latest order (by time or by the orderId from the Functions emulator log)
+   - Confirm it has a field `checkoutRequestID` (camelCase) with a value like `ws_CO_...`
+   - If the field is missing, the backend did not update the order after STK push (restart emulators and try again)
 
 ### Environment Variables Not Loading
 

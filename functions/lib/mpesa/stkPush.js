@@ -39,6 +39,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getCallbackUrl = getCallbackUrl;
 exports.initiateSTKPush = initiateSTKPush;
 const dotenv = __importStar(require("dotenv"));
 const axios_1 = __importDefault(require("axios"));
@@ -114,7 +115,12 @@ function getCallbackUrl() {
     if (ngrokUrl) {
         // Remove trailing slash if present
         const cleanUrl = ngrokUrl.replace(/\/$/, '');
-        return `${cleanUrl}/mpesaCallback`;
+        // In the Functions emulator, HTTP functions are served at
+        // /{projectId}/{region}/{functionName}
+        // ngrok forwards to localhost:5001, so the full path is required
+        const projectId = process.env.GCLOUD_PROJECT || "ist-flutter-android-app";
+        const region = process.env.FUNCTION_REGION || "us-central1";
+        return `${cleanUrl}/${projectId}/${region}/mpesaCallback`;
     }
     // Production: Use Firebase Cloud Functions URL
     const projectId = process.env.GCLOUD_PROJECT || ((_a = functions.config().project) === null || _a === void 0 ? void 0 : _a.id);

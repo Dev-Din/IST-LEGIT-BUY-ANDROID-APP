@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/cart_provider.dart';
@@ -15,6 +16,7 @@ class CartScreen extends StatelessWidget {
       ),
       body: Consumer<CartProvider>(
         builder: (context, cartProvider, child) {
+          final displayTotal = kDebugMode ? 1.0 : cartProvider.total;
           if (cartProvider.isEmpty) {
             return const Center(
               child: Column(
@@ -76,7 +78,7 @@ class CartScreen extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'KES ${cartProvider.total.toStringAsFixed(2)}',
+                          'KES ${displayTotal.toStringAsFixed(2)}',
                           style: const TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,

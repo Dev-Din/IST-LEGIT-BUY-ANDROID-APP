@@ -37,7 +37,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.mpesaCallback = exports.initiateMpesaPayment = void 0;
+exports.paymentStatus = exports.mpesaCallback = exports.initiateMpesaPayment = void 0;
 // Load environment variables from .env file FIRST (before any imports that might need them)
 const dotenv = __importStar(require("dotenv"));
 dotenv.config();
@@ -111,6 +111,7 @@ exports.initiateMpesaPayment = functions.https.onCall(async (data, context) => {
             throw new functions.https.HttpsError("permission-denied", "Order does not belong to user");
         }
         // Initiate STK Push
+        const callbackUrl = (0, stkPush_1.getCallbackUrl)();
         const stkResponse = await (0, stkPush_1.initiateSTKPush)(formattedPhone, amount, orderId);
         // Store CheckoutRequestID in order for callback matching
         await db.collection("orders").doc(orderId).update({
@@ -122,6 +123,7 @@ exports.initiateMpesaPayment = functions.https.onCall(async (data, context) => {
         functions.logger.info("STK Push initiated", {
             orderId,
             checkoutRequestID: stkResponse.CheckoutRequestID,
+            callbackUrl: callbackUrl,
         });
         // Return response to Flutter app
         return {
@@ -157,7 +159,16 @@ exports.initiateMpesaPayment = functions.https.onCall(async (data, context) => {
  */
 exports.mpesaCallback = functions.https.onRequest(async (req, res) => {
     var _a, _b;
-    // Only accept POST requests
+    // Handle GET requests for health check / manual verification
+    if (req.method === "GET") {
+        res.status(200).json({
+            ok: true,
+            message: "Callback URL is reachable",
+            endpoint: "mpesaCallback",
+        });
+        return;
+    }
+    // Only accept POST requests for actual callbacks
     if (req.method !== "POST") {
         res.status(405).send("Method Not Allowed");
         return;
@@ -265,6 +276,66 @@ exports.mpesaCallback = functions.https.onRequest(async (req, res) => {
             ResultCode: 0,
             ResultDesc: "Callback received (error logged)",
         });
+    }
+});
+/**
+ * HTTP Function: Get payment status by checkout request ID
+ * Returns payment status from Firestore for polling
+ */
+exports.paymentStatus = functions.https.onRequest(async (req, res) => {
+    // Only accept GET requests
+    if (req.method !== "GET") {
+        res.status(405).json({ error: "Method Not Allowed" });
+        return;
+    }
+    try {
+        const checkoutRequestId = req.query.checkout_request_id;
+        if (!checkoutRequestId) {
+            res.status(400).json({ error: "checkout_request_id is required" });
+            return;
+        }
+        // Query Firestore for order with matching checkoutRequestID
+        const ordersSnapshot = await db
+            .collection("orders")
+            .where("checkoutRequestID", "==", checkoutRequestId)
+            .limit(1)
+            .get();
+        if (ordersSnapshot.empty) {
+            res.status(404).json({ error: "Payment not found" });
+            return;
+        }
+        const orderDoc = ordersSnapshot.docs[0];
+        const orderData = orderDoc.data();
+        const paymentStatus = orderData.paymentStatus;
+        const mpesaTransactionId = orderData.mpesaTransactionId;
+        // Map Firestore paymentStatus to API response
+        let status;
+        let message;
+        if (paymentStatus === "paid") {
+            status = "completed";
+            message = "Payment completed";
+        }
+        else if (paymentStatus === "failed") {
+            status = "failed";
+            message = "Payment failed";
+        }
+        else {
+            // pending or processing
+            status = "pending";
+            message = "Payment pending";
+        }
+        const response = {
+            status,
+            message,
+        };
+        if (mpesaTransactionId) {
+            response.mpesa_receipt = mpesaTransactionId;
+        }
+        res.status(200).json(response);
+    }
+    catch (error) {
+        functions.logger.error("Error getting payment status", error);
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 //# sourceMappingURL=index.js.map

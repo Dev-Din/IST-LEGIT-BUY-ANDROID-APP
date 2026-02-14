@@ -18,11 +18,14 @@ import 'services/auth_service.dart';
 import 'core/constants/app_constants.dart';
 import 'core/theme/app_theme.dart';
 import 'core/config/firebase_options.dart';
+import 'core/utils/debug_logger.dart';
 import 'widgets/emulator_banner_filter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
+  await DebugLogger.init();
+
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
