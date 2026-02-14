@@ -153,20 +153,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     style: TextStyle(color: Colors.red),
                   ),
                   onTap: () {
+                    final navigator = Navigator.of(context);
                     showDialog(
                       context: context,
-                      builder: (context) => AlertDialog(
+                      builder: (dialogContext) => AlertDialog(
                         title: const Text('Logout'),
                         content: const Text('Are you sure you want to logout?'),
                         actions: [
                           TextButton(
-                            onPressed: () => Navigator.pop(context),
+                            onPressed: () => Navigator.pop(dialogContext),
                             child: const Text('Cancel'),
                           ),
                           TextButton(
-                            onPressed: () {
-                              authProvider.signOut();
-                              Navigator.pop(context);
+                            onPressed: () async {
+                              Navigator.pop(dialogContext);
+                              await authProvider.signOut();
+                              navigator.popUntil((Route<dynamic> route) => route.isFirst);
                             },
                             child: const Text('Logout'),
                           ),

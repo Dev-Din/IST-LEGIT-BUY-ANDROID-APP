@@ -176,4 +176,21 @@ class FirestoreService {
         .doc(userId)
         .update({'role': role});
   }
+
+  /// Update user document fields (name, email, role). Does not change Firebase Auth.
+  Future<void> updateUser(String userId, Map<String, dynamic> updates) async {
+    if (updates.isEmpty) return;
+    await _firestore
+        .collection(AppConstants.usersCollection)
+        .doc(userId)
+        .update(updates);
+  }
+
+  /// Delete user document from Firestore only. For full delete (Auth + Firestore) use the deleteUser callable.
+  Future<void> deleteUserDocument(String userId) async {
+    await _firestore
+        .collection(AppConstants.usersCollection)
+        .doc(userId)
+        .delete();
+  }
 }
