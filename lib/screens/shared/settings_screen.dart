@@ -5,7 +5,9 @@ import '../../providers/theme_provider.dart';
 import 'support_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  final VoidCallback? openDrawer;
+
+  const SettingsScreen({super.key, this.openDrawer});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -37,6 +39,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: widget.openDrawer != null
+            ? IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: widget.openDrawer,
+              )
+            : null,
         title: const Text('Settings'),
       ),
       body: Consumer<AuthProvider>(

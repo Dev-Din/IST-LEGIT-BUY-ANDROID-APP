@@ -7,12 +7,14 @@ import '../../core/utils/date_formatter.dart';
 import '../../core/constants/app_constants.dart';
 
 class OrderHistoryScreen extends StatelessWidget {
-  const OrderHistoryScreen({super.key});
+  final VoidCallback? openDrawer;
+
+  const OrderHistoryScreen({super.key, this.openDrawer});
 
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
-    
+
     if (authProvider.user == null) {
       return const Scaffold(
         body: Center(child: Text('Please login to view orders')),
@@ -21,6 +23,12 @@ class OrderHistoryScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: openDrawer != null
+            ? IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: openDrawer,
+              )
+            : null,
         title: const Text('Order History'),
       ),
       body: StreamBuilder<List<OrderModel>>(

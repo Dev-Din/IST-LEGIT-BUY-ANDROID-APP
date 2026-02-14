@@ -6,12 +6,20 @@ import '../../core/utils/date_formatter.dart';
 import '../../core/constants/app_constants.dart';
 
 class OrderManagementScreen extends StatelessWidget {
-  const OrderManagementScreen({super.key});
+  final VoidCallback? openDrawer;
+
+  const OrderManagementScreen({super.key, this.openDrawer});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: openDrawer != null
+            ? IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: openDrawer,
+              )
+            : null,
         title: const Text('Manage Orders'),
       ),
       body: StreamBuilder<List<OrderModel>>(

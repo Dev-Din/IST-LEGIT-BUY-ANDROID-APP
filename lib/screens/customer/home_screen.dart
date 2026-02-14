@@ -10,7 +10,9 @@ import 'cart_screen.dart';
 import '../shared/settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final VoidCallback? openDrawer;
+
+  const HomeScreen({super.key, this.openDrawer});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -27,6 +29,12 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       return Scaffold(
       appBar: AppBar(
+        leading: widget.openDrawer != null
+            ? IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: widget.openDrawer,
+              )
+            : null,
         title: const Text('LegitBuy'),
         actions: [
           IconButton(

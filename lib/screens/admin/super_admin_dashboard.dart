@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../core/constants/app_constants.dart';
 import 'role_admin_management_screen.dart';
-import 'admin_dashboard.dart';
+import 'admin_shell.dart';
 import '../shared/settings_screen.dart';
 import '../auth/login_screen.dart';
 
@@ -80,7 +80,7 @@ class SuperAdminDashboard extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const AdminDashboard(),
+                        builder: (context) => const AdminShell(),
                       ),
                     );
                   },

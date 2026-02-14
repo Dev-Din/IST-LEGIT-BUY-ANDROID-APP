@@ -11,9 +11,9 @@ import 'providers/cart_provider.dart';
 import 'providers/order_provider.dart';
 import 'providers/theme_provider.dart';
 import 'screens/auth/login_screen.dart';
-import 'screens/customer/home_screen.dart';
-import 'screens/admin/admin_dashboard.dart';
-import 'screens/admin/super_admin_dashboard.dart';
+import 'screens/customer/customer_shell.dart';
+import 'screens/admin/admin_shell.dart';
+import 'screens/admin/super_admin_shell.dart';
 import 'services/auth_service.dart';
 import 'core/constants/app_constants.dart';
 import 'core/theme/app_theme.dart';
@@ -203,11 +203,11 @@ class AuthWrapper extends StatelessWidget {
 
         // Role-based navigation
         if (authProvider.isSuperAdmin) {
-          return const SuperAdminDashboard();
+          return const SuperAdminShell();
         } else if (authProvider.isAdmin) {
-          return const AdminDashboard();
+          return const AdminShell();
         } else {
-          return const HomeScreen();
+          return const CustomerShell();
         }
       },
     );

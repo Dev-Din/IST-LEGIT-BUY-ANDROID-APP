@@ -8,12 +8,20 @@ import 'user_management_screen.dart';
 import '../shared/settings_screen.dart';
 
 class AdminDashboard extends StatelessWidget {
-  const AdminDashboard({super.key});
+  final VoidCallback? openDrawer;
+
+  const AdminDashboard({super.key, this.openDrawer});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: openDrawer != null
+            ? IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: openDrawer,
+              )
+            : null,
         title: const Text('LegitBuy Admin'),
         actions: [
           IconButton(
