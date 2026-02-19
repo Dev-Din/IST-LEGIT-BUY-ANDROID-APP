@@ -115,6 +115,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       cartProvider.clearCart();
 
       // Navigate to payment waiting screen
+      if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => PaymentWaitingScreen(

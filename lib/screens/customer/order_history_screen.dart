@@ -180,7 +180,7 @@ class OrderHistoryScreen extends StatelessWidget {
 
     return Chip(
       label: Text(text),
-      backgroundColor: color.withOpacity(0.2),
+      backgroundColor: color.withValues(alpha: 0.2),
       labelStyle: TextStyle(color: color, fontWeight: FontWeight.bold),
     );
   }

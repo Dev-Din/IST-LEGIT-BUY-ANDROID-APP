@@ -36,7 +36,6 @@ class DebugLogger {
 
       // Always print to console for web compatibility
       final logString = '[DEBUG] $location: $message${data != null ? ' | Data: $data' : ''}${hypothesisId != null ? ' | Hypothesis: $hypothesisId' : ''}';
-      print(logString);
       debugPrint(logString);
 
       // Try to write to file (works on mobile/desktop, no-op on web)
@@ -49,7 +48,7 @@ class DebugLogger {
       }
     } catch (e) {
       // Fallback: at least print the error
-      print('[DEBUG LOGGER ERROR] $e');
+      debugPrint('[DEBUG LOGGER ERROR] $e');
     }
   }
 }

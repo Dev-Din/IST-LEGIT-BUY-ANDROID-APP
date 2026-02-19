@@ -174,8 +174,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showCreateUserDialog(context),
-        child: const Icon(Icons.add),
         tooltip: 'Add User',
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -392,7 +392,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: selectedRole,
+                    initialValue: selectedRole,
                     style: TextStyle(fontSize: bodySize),
                     decoration: InputDecoration(
                       labelText: 'Role',
