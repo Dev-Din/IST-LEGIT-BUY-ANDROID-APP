@@ -121,6 +121,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           builder: (_) => PaymentWaitingScreen(
             checkoutRequestId: checkoutRequestId,
             customerMessage: customerMessage,
+            orderId: orderId,
           ),
         ),
       );

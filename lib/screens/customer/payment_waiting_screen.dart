@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/payment_service.dart';
 import 'payment_success_screen.dart';
 import 'payment_failure_screen.dart';
@@ -7,11 +8,13 @@ import 'payment_failure_screen.dart';
 class PaymentWaitingScreen extends StatefulWidget {
   final String checkoutRequestId;
   final String? customerMessage;
+  final String? orderId;
 
   const PaymentWaitingScreen({
     super.key,
     required this.checkoutRequestId,
     this.customerMessage,
+    this.orderId,
   });
 
   @override
@@ -24,19 +27,50 @@ class _PaymentWaitingScreenState extends State<PaymentWaitingScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   final PaymentService _paymentService = PaymentService();
+  StreamSubscription<DocumentSnapshot>? _orderSubscription;
 
   @override
   void initState() {
     super.initState();
-    // Check immediately, then every 15 seconds
-    _checkStatus();
+    _startFirestoreListener();
     _startPolling();
     _startTimeout();
   }
 
+  /// Primary detection: listen to the order document in real time.
+  /// Fires within ~1-2 seconds of the backend updating paymentStatus.
+  void _startFirestoreListener() {
+    if (widget.orderId != null && widget.orderId!.isNotEmpty) {
+      _orderSubscription = FirebaseFirestore.instance
+          .collection('orders')
+          .doc(widget.orderId)
+          .snapshots()
+          .listen((snapshot) {
+        if (!mounted || !_isLoading) return;
+        final data = snapshot.data();
+        if (data == null) return;
+
+        final paymentStatus = data['paymentStatus'] as String?;
+        final mpesaReceipt = data['mpesaTransactionId'] as String?;
+
+        if (paymentStatus == 'paid') {
+          _onPaymentCompleted(mpesaReceipt);
+        } else if (paymentStatus == 'failed') {
+          _onPaymentFailed(null);
+        }
+      }, onError: (_) {
+        // Listener error — polling fallback will handle it
+      });
+    } else {
+      // No orderId available; do an immediate poll instead
+      _checkStatus();
+    }
+  }
+
+  /// Fallback: poll the paymentStatus HTTP endpoint every 3 seconds
   void _startPolling() {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       _checkStatus();
     });
   }
@@ -51,48 +85,48 @@ class _PaymentWaitingScreenState extends State<PaymentWaitingScreen> {
       if (!mounted || !_isLoading) return;
 
       if (status == 'completed') {
-        _pollTimer?.cancel();
-        _timeoutTimer?.cancel();
-        setState(() {
-          _isLoading = false;
-        });
         final mpesaReceipt = statusData['mpesa_receipt'] as String?;
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => PaymentSuccessScreen(mpesaReceipt: mpesaReceipt),
-          ),
-        );
+        _onPaymentCompleted(mpesaReceipt);
       } else if (status == 'failed') {
-        _pollTimer?.cancel();
-        _timeoutTimer?.cancel();
-        setState(() {
-          _isLoading = false;
-        });
         final message = statusData['message'] as String?;
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => PaymentFailureScreen(message: message),
-          ),
-        );
+        _onPaymentFailed(message);
       }
-      // If status is 'pending', continue polling (do nothing)
     } catch (e) {
       if (mounted && _isLoading) {
         setState(() {
           _errorMessage = 'Error checking status: ${e.toString()}';
         });
-        // Continue polling despite error
       }
     }
+  }
+
+  void _onPaymentCompleted(String? mpesaReceipt) {
+    if (!_isLoading) return;
+    _cancelAll();
+    setState(() => _isLoading = false);
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => PaymentSuccessScreen(mpesaReceipt: mpesaReceipt),
+      ),
+    );
+  }
+
+  void _onPaymentFailed(String? message) {
+    if (!_isLoading) return;
+    _cancelAll();
+    setState(() => _isLoading = false);
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => PaymentFailureScreen(message: message),
+      ),
+    );
   }
 
   void _startTimeout() {
     _timeoutTimer = Timer(const Duration(minutes: 5), () {
       if (mounted && _isLoading) {
-        _pollTimer?.cancel();
-        setState(() {
-          _isLoading = false;
-        });
+        _cancelAll();
+        setState(() => _isLoading = false);
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (_) => const PaymentFailureScreen(
@@ -104,10 +138,15 @@ class _PaymentWaitingScreenState extends State<PaymentWaitingScreen> {
     });
   }
 
-  @override
-  void dispose() {
+  void _cancelAll() {
     _pollTimer?.cancel();
     _timeoutTimer?.cancel();
+    _orderSubscription?.cancel();
+  }
+
+  @override
+  void dispose() {
+    _cancelAll();
     super.dispose();
   }
 

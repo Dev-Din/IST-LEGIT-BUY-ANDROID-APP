@@ -76,7 +76,7 @@ class AdminDashboard extends StatelessWidget {
                       crossAxisCount: 2,
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 16,
-                      childAspectRatio: 1.5,
+                      childAspectRatio: 1.1,
                       children: [
                         _StatCard(
                           title: 'Total Products',
